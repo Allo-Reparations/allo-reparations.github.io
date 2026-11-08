@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mon Stock</title>
+<script src="https://unpkg.com/html5-qrcode"></script>
+<style>
+ body{font-family:sans-serif;margin:0;padding:15px;background:#f4f4f4}
+ h1{text-align:center;margin:5px 0 15px}
+ #reader{width:100%;max-width:400px;margin:auto}
+ .box{background:#fff;padding:15px;border-radius:12px;margin:15px 0;text-align:center}
+ input{font-size:22px;width:100px;text-align:center;padding:8px}
+ button{font-size:20px;padding:15px;border:none;border-radius:10px;color:#fff;width:45%;margin:5px}
+ .plus{background:#2e9e44}.moins{background:#d33}.scan{background:#3366cc;width:95%}
+ table{width:100%;background:#fff;border-collapse:collapse}
+ td,th{padding:10px;border-bottom:1px solid #ddd}
+</style>
+</head>
+<body>
+<h1>📦 Mon Stock</h1>
+<button class="scan" onclick="demarrer()">📷 Scanner un article</button>
+<div id="reader"></div>
+<div class="box" id="article" style="display:none">
+ <h2 id="nom"></h2>
+ <p>Stock actuel : <b id="qte"></b></p>
+ Quantité : <input type="number" id="nb" value="1" min="1"><br>
+ <button class="plus" onclick="modifier(1)">➕ Ajouter</button>
+ <button class="moins" onclick="modifier(-1)">➖ Retirer</button>
+</div>
+<table><thead><tr><th>Article</th><th>Stock</th></tr></thead><tbody id="liste"></tbody></table>
+<script>
+let stock = JSON.parse(localStorage.getItem("stock") || "{}");
+let code = null, scanner = null;
+function sauver(){localStorage.setItem("stock",JSON.stringify(stock));afficherListe();}
+function afficherListe(){
+ document.getElementById("liste").innerHTML = Object.values(stock)
+  .map(a=>`<tr><td>${a.nom}</td><td><b>${a.qte}</b></td></tr>`).join("");
+}
+function demarrer(){
+ scanner = new Html5Qrcode("reader");
+ scanner.start({facingMode:"environment"},{fps:10,qrbox:250},(texte)=>{
+  scanner.stop(); scanner = null; choisir(texte);
+ });
+}
+function choisir(c){
+ code = c;
+ if(!stock[c]){
+  const nom = prompt("Nouvel article ! Quel est son nom ?");
+  if(!nom) return;
+  stock[c] = {nom:nom, qte:0}; sauver();
+ }
+ document.getElementById("article").style.display="block";
+ document.getElementById("nom").textContent = stock[c].nom;
+ document.getElementById("qte").textContent = stock[c].qte;
+}
+function modifier(sens){
+ const n = parseInt(document.getElementById("nb").value) || 0;
+ stock[code].qte = Math.max(0, stock[code].qte + sens*n);
+ document.getElementById("qte").textContent = stock[code].qte;
+ sauver();
+}
+afficherListe();
+</script>
+</body>
+</html>
