@@ -9,9 +9,10 @@
 <style>
   body{font-family:sans-serif;margin:0;padding:15px;background:#f2f2f2}
   h1{text-align:center;margin:5px 0 15px}
+  h3{margin:15px 0 5px;color:#007aff}
   button{font-size:20px;padding:15px;border:none;border-radius:10px;width:100%;margin:5px 0;color:#fff}
   .scan{background:#007aff}.plus{background:#34c759}.moins{background:#ff3b30}.gris{background:#888}
-  input{font-size:20px;padding:12px;width:100%;box-sizing:border-box;border-radius:10px;border:1px solid #ccc;margin:5px 0}
+  input,select{font-size:20px;padding:12px;width:100%;box-sizing:border-box;border-radius:10px;border:1px solid #ccc;margin:5px 0;background:#fff}
   #carte{background:#fff;padding:15px;border-radius:10px;margin:10px 0;display:none}
   .art{background:#fff;padding:12px;border-radius:10px;margin:6px 0;display:flex;justify-content:space-between;font-size:18px}
   .qte{font-weight:bold}
@@ -28,22 +29,37 @@
 <div id="carte">
   <div id="nomArt" style="font-size:22px;font-weight:bold"></div>
   <div id="infoArt"></div>
+  <select id="cat"></select>
   <input id="qte" type="number" value="1" min="1">
   <button class="plus" onclick="modif(1)">➕ Ajouter</button>
   <button class="moins" onclick="modif(-1)">➖ Retirer</button>
 </div>
 <div id="msg"></div>
 <h2>Articles</h2>
+<select id="filtre" onchange="afficher()"></select>
 <button class="gris" onclick="charger()">🔄 Actualiser</button>
 <div id="liste"></div>
 
 <script>
 const API="https://script.google.com/macros/s/AKfycbzoRfEK-UvxKi5FLESjQeIs34DK_GJstWXObkU-oNg7HIYzmRhLhjnn18Sz99i3NCqC/exec";
+const CATS=["Câble","Chargeur","Dock","Dock + câble","Écouteurs","Batterie externe","Hydrogel","Écran in-cell","Écran soft LED"];
 let stock=[],actuel=null,scanner=null;
 
+document.getElementById("cat").innerHTML='<option value="">-- Catégorie --</option>'+CATS.map(c=>`<option>${c}</option>`).join("");
+document.getElementById("filtre").innerHTML='<option value="">Toutes les catégories</option>'+CATS.map(c=>`<option>${c}</option>`).join("");
+
+function catDe(a){return CATS.includes(a.cat)?a.cat:"";}
 function afficher(){
-  document.getElementById("liste").innerHTML=stock.map(a=>
-    `<div class="art" onclick="choisir('${a.code}')"><span>${a.nom||a.code}</span><span class="qte">${a.qte}</span></div>`).join("");
+  const f=document.getElementById("filtre").value;
+  let h="";
+  [...CATS,""].forEach(c=>{
+    if(f && f!==c)return;
+    const arts=stock.filter(a=>catDe(a)===c);
+    if(!arts.length)return;
+    h+=`<h3>${c||"Sans catégorie"}</h3>`+arts.map(a=>
+      `<div class="art" onclick="choisir('${a.code}')"><span>${a.nom||a.code}</span><span class="qte">${a.qte}</span></div>`).join("");
+  });
+  document.getElementById("liste").innerHTML=h||"<p>Aucun article</p>";
 }
 async function appel(params){
   const r=await fetch(API+"?"+new URLSearchParams(params));
@@ -68,11 +84,12 @@ function choisir(code){
   if(!a){
     const nom=prompt("Nouvel article ! Quel est son nom ?");
     if(nom===null)return;
-    a={code:code,nom:nom,qte:0};
+    a={code:code,nom:nom,qte:0,cat:""};
   }
   actuel=a;
   document.getElementById("nomArt").textContent=a.nom||a.code;
   document.getElementById("infoArt").textContent="Stock actuel : "+a.qte+"  (code "+a.code+")";
+  document.getElementById("cat").value=catDe(a);
   document.getElementById("qte").value=1;
   document.getElementById("carte").style.display="block";
   window.scrollTo(0,0);
@@ -83,7 +100,7 @@ async function modif(sens){
   if(n<=0)return;
   msg("Enregistrement...");
   try{
-    await appel({action:"modif",code:actuel.code,nom:actuel.nom,delta:sens*n});
+    await appel({action:"modif",code:actuel.code,nom:actuel.nom,delta:sens*n,cat:document.getElementById("cat").value});
     const a=stock.find(x=>x.code==actuel.code);
     msg((sens>0?"✅ Ajouté ":"✅ Retiré ")+n+" — stock : "+(a?a.qte:0));
     document.getElementById("carte").style.display="none";actuel=null;
