@@ -3,64 +3,93 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title>Mon Stock</title>
-<script src="https://unpkg.com/html5-qrcode"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
- body{font-family:sans-serif;margin:0;padding:15px;background:#f4f4f4}
- h1{text-align:center;margin:5px 0 15px}
- #reader{width:100%;max-width:400px;margin:auto}
- .box{background:#fff;padding:15px;border-radius:12px;margin:15px 0;text-align:center}
- input{font-size:22px;width:100px;text-align:center;padding:8px}
- button{font-size:20px;padding:15px;border:none;border-radius:10px;color:#fff;width:45%;margin:5px}
- .plus{background:#2e9e44}.moins{background:#d33}.scan{background:#3366cc;width:95%}
- table{width:100%;background:#fff;border-collapse:collapse}
- td,th{padding:10px;border-bottom:1px solid #ddd}
+  body{font-family:sans-serif;margin:0;padding:15px;background:#f2f2f2}
+  h1{text-align:center;margin:5px 0 15px}
+  button{font-size:20px;padding:15px;border:none;border-radius:10px;width:100%;margin:5px 0;color:#fff}
+  .scan{background:#007aff}.plus{background:#34c759}.moins{background:#ff3b30}.gris{background:#888}
+  input{font-size:20px;padding:12px;width:100%;box-sizing:border-box;border-radius:10px;border:1px solid #ccc;margin:5px 0}
+  #carte{background:#fff;padding:15px;border-radius:10px;margin:10px 0;display:none}
+  .art{background:#fff;padding:12px;border-radius:10px;margin:6px 0;display:flex;justify-content:space-between;font-size:18px}
+  .qte{font-weight:bold}
+  #msg{text-align:center;font-size:18px;min-height:24px}
 </style>
 </head>
 <body>
 <h1>📦 Mon Stock</h1>
-<button class="scan" onclick="demarrer()">📷 Scanner un article</button>
-<div id="reader"></div>
-<div class="box" id="article" style="display:none">
- <h2 id="nom"></h2>
- <p>Stock actuel : <b id="qte"></b></p>
- Quantité : <input type="number" id="nb" value="1" min="1"><br>
- <button class="plus" onclick="modifier(1)">➕ Ajouter</button>
- <button class="moins" onclick="modifier(-1)">➖ Retirer</button>
+<button class="scan" onclick="lancerScan()">📷 Scanner un article</button>
+<div id="lecteur"></div>
+<input id="codeManuel" placeholder="ou tape le code ici">
+<button class="gris" onclick="choisir(document.getElementById('codeManuel').value.trim())">Valider le code</button>
+
+<div id="carte">
+  <div id="nomArt" style="font-size:22px;font-weight:bold"></div>
+  <div id="infoArt"></div>
+  <input id="qte" type="number" value="1" min="1">
+  <button class="plus" onclick="modif(1)">➕ Ajouter</button>
+  <button class="moins" onclick="modif(-1)">➖ Retirer</button>
 </div>
-<table><thead><tr><th>Article</th><th>Stock</th></tr></thead><tbody id="liste"></tbody></table>
+<div id="msg"></div>
+<h2>Articles</h2>
+<button class="gris" onclick="charger()">🔄 Actualiser</button>
+<div id="liste"></div>
+
 <script>
-let stock = JSON.parse(localStorage.getItem("stock") || "{}");
-let code = null, scanner = null;
-function sauver(){localStorage.setItem("stock",JSON.stringify(stock));afficherListe();}
-function afficherListe(){
- document.getElementById("liste").innerHTML = Object.values(stock)
-  .map(a=>`<tr><td>${a.nom}</td><td><b>${a.qte}</b></td></tr>`).join("");
+const API="https://script.google.com/macros/s/AKfycbzoRfEK-UvxKi5FLESjQeIs34DK_GJstWXObkU-oNg7HIYzmRhLhjnn18Sz99i3NCqC/exec";
+let stock=[],actuel=null,scanner=null;
+
+function afficher(){
+  document.getElementById("liste").innerHTML=stock.map(a=>
+    `<div class="art" onclick="choisir('${a.code}')"><span>${a.nom||a.code}</span><span class="qte">${a.qte}</span></div>`).join("");
 }
-function demarrer(){
- scanner = new Html5Qrcode("reader");
- scanner.start({facingMode:"environment"},{fps:10,qrbox:250},(texte)=>{
-  scanner.stop(); scanner = null; choisir(texte);
- });
+async function appel(params){
+  const r=await fetch(API+"?"+new URLSearchParams(params));
+  stock=await r.json();afficher();
 }
-function choisir(c){
- code = c;
- if(!stock[c]){
-  const nom = prompt("Nouvel article ! Quel est son nom ?");
-  if(!nom) return;
-  stock[c] = {nom:nom, qte:0}; sauver();
- }
- document.getElementById("article").style.display="block";
- document.getElementById("nom").textContent = stock[c].nom;
- document.getElementById("qte").textContent = stock[c].qte;
+async function charger(){
+  msg("Chargement...");
+  try{await appel({});msg("");}catch(e){msg("Erreur de connexion");}
 }
-function modifier(sens){
- const n = parseInt(document.getElementById("nb").value) || 0;
- stock[code].qte = Math.max(0, stock[code].qte + sens*n);
- document.getElementById("qte").textContent = stock[code].qte;
- sauver();
+function msg(t){document.getElementById("msg").textContent=t;}
+
+function lancerScan(){
+  if(scanner){return;}
+  scanner=new Html5Qrcode("lecteur");
+  scanner.start({facingMode:"environment"},{fps:10,qrbox:{width:250,height:150}},
+    code=>{scanner.stop().then(()=>{scanner.clear();scanner=null;});choisir(code);},()=>{})
+  .catch(()=>{msg("Caméra impossible");scanner=null;});
 }
-afficherListe();
+function choisir(code){
+  if(!code)return;
+  let a=stock.find(x=>x.code==code);
+  if(!a){
+    const nom=prompt("Nouvel article ! Quel est son nom ?");
+    if(nom===null)return;
+    a={code:code,nom:nom,qte:0};
+  }
+  actuel=a;
+  document.getElementById("nomArt").textContent=a.nom||a.code;
+  document.getElementById("infoArt").textContent="Stock actuel : "+a.qte+"  (code "+a.code+")";
+  document.getElementById("qte").value=1;
+  document.getElementById("carte").style.display="block";
+  window.scrollTo(0,0);
+}
+async function modif(sens){
+  if(!actuel)return;
+  const n=parseInt(document.getElementById("qte").value)||0;
+  if(n<=0)return;
+  msg("Enregistrement...");
+  try{
+    await appel({action:"modif",code:actuel.code,nom:actuel.nom,delta:sens*n});
+    const a=stock.find(x=>x.code==actuel.code);
+    msg((sens>0?"✅ Ajouté ":"✅ Retiré ")+n+" — stock : "+(a?a.qte:0));
+    document.getElementById("carte").style.display="none";actuel=null;
+  }catch(e){msg("Erreur, réessaie");}
+}
+charger();
 </script>
 </body>
 </html>
